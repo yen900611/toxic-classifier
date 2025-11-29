@@ -26,6 +26,7 @@ graph LR
     Frontend -->|HTTP POST| Backend[FastAPI Container<br/>Port 8000]
     Backend -->|Loads| Model[ML Model .pkl]
     Backend -->|JSON| Frontend
+```
 
 ---
 
