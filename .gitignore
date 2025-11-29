@@ -1,0 +1,5 @@
+venv/
+__pycache__/
+.DS_Store
+*.pkl    <-- OPTIONAL: If the model is small (<100MB), keep it. If huge, ignore it.
+data/    <-- Don't upload the raw Kaggle CSVs (too big)
