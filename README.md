@@ -22,11 +22,10 @@ The application follows a microservices pattern where the frontend and backend r
 
 ```mermaid
 graph LR
-    User[User] -- Browser --> Frontend[Streamlit Container\nPort: 8501]
-    Frontend -- HTTP POST --> Backend[FastAPI Container\nPort: 8000]
-    Backend -- Loads --> Model[ML Model (.pkl)]
-    Backend -- JSON --> Frontend
-````
+    User[User] --> Frontend[Streamlit Container<br/>Port 8501]
+    Frontend -->|HTTP POST| Backend[FastAPI Container<br/>Port 8000]
+    Backend -->|Loads| Model[ML Model .pkl]
+    Backend -->|JSON| Frontend
 
 ---
 
