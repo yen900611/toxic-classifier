@@ -3,56 +3,62 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from sklearn.multioutput import MultiOutputClassifier  # <--- NEW HERO
 from sklearn.metrics import accuracy_score
 import joblib
 import os
 
-# 1. Configuration
-# Make sure this path points to where you unzipped the Kaggle data
+# Configuration
 DATA_PATH = "./data/train.csv"
 MODEL_DIR = "./backend/app/resources"
 MODEL_PATH = os.path.join(MODEL_DIR, "toxic_model.pkl")
 
-# Create the backend resources directory if it doesn't exist yet
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 
 def train():
     print("Loading data...")
-    # Load only the necessary columns to save memory
     df = pd.read_csv(DATA_PATH)
 
-    # We will focus on the 'toxic' label for this MVP
-    # Handle missing values in text (just in case)
+    # Handle missing values
     df['comment_text'] = df['comment_text'].fillna('')
 
+    # Define features and ALL target labels
     X = df['comment_text']
-    y = df['toxic']
+    # The 6 specific labels from the Kaggle dataset
+    target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+    y = df[target_cols]
 
-    # 2. Split Data (80% training, 20% testing)
+    print(f"Targets: {target_cols}")
+
+    # Split Data
     print("Splitting data...")
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # 3. Build Pipeline
-    # TfidfVectorizer: Converts text to numbers based on word frequency
-    # LogisticRegression: The classification algorithm
-    print("Training model (this might take a minute)...")
+    # Build Pipeline
+    print("Training Multi-Label model...")
     pipeline = Pipeline([
-        ('tfidf', TfidfVectorizer(max_features=5000)),  # Limit to top 5k words to keep model small
-        ('clf', LogisticRegression())
+        ('tfidf', TfidfVectorizer(max_features=10000)),  # Increased features for better accuracy
+        # MultiOutputClassifier trains one regressor per column automatically
+        ('clf', MultiOutputClassifier(LogisticRegression(solver='liblinear')))
     ])
 
     pipeline.fit(X_train, y_train)
 
-    # 4. Evaluate
-    print("Evaluating model...")
+    # Evaluate
+    print("Evaluating...")
     predictions = pipeline.predict(X_test)
-    accuracy = accuracy_score(y_test, predictions)
-    print(f"Model Accuracy: {accuracy:.4f}")
+    # Average accuracy across all labels
+    print(f"Overall Accuracy: {pipeline.score(X_test, y_test):.4f}")
 
-    # 5. Save the Pipeline
+    # Save the Pipeline AND the list of column names
+    # We save a dictionary so the backend knows what the 0,1,2... indexes mean
     print(f"Saving model to {MODEL_PATH}...")
-    joblib.dump(pipeline, MODEL_PATH)
+    model_data = {
+        "pipeline": pipeline,
+        "labels": target_cols
+    }
+    joblib.dump(model_data, MODEL_PATH)
     print("Done!")
 
 
