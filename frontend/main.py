@@ -15,50 +15,86 @@ st.sidebar.info("Default key: frontend-dev-key")
 
 # 2. Main UI Layout
 st.title("🤬 Toxic Comment Classifier")
-st.markdown("Enter a comment below to check if it's toxic.")
+# Create Tabs
+tab1, tab2 = st.tabs(["💬 Single Comment", "📂 Batch Analysis"])
 
-# Input area
-user_input = st.text_area("Comment Text:", placeholder="Type something here...")
+# --- TAB 1: SINGLE MODE (Keep your old logic here) ---
+with tab1:
+    st.markdown("Enter a comment below to check if it's toxic.")
+    user_input = st.text_area("Comment Text:", placeholder="Type something here...")
 
-if st.button("Analyze"):
-    if user_input.strip():
-        try:
-            # 3. Call the API
-            # Now 'api_key' exists because we defined it in the sidebar above
-            headers = {"X-API-Key": api_key}
-            payload = {"text": user_input}
+    if st.button("Analyze Single"):
+        if user_input.strip():
+            try:
+                headers = {"X-API-Key": api_key}
+                payload = {"text": user_input}
+                response = requests.post(f"{API_URL}/predict", json=payload, headers=headers)
 
-            response = requests.post(API_URL, json=payload, headers=headers)
+                # ... (Keep your existing single result display logic here) ...
+                # Note: Ensure API_URL in requests.post doesn't double the /predict path if you changed config
+                # Easier way: Just hardcode or adjust os.getenv to base url
+                if response.status_code == 200:
+                    data = response.json()
+                    results = data["results"]
+                    st.write("---")
+                    for label, score in results.items():
+                        col1, col2 = st.columns([1, 3])
+                        with col1: st.markdown(f"**{label.title()}**")
+                        with col2: st.progress(score); st.caption(f"{score:.2%}")
+                else:
+                    st.error(f"Error: {response.status_code}")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-            # Check if request was successful
-            if response.status_code == 200:
-                data = response.json()
-                results = data["results"]
+# --- TAB 2: BATCH MODE (New!) ---
+with tab2:
+    st.markdown("Upload a CSV file containing a column named `text`.")
+    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
-                # 4. Display Results
-                st.write("---")
-                st.subheader("Analysis Results:")
+    if uploaded_file is not None:
+        import pandas as pd
 
-                for label, score in results.items():
-                    col1, col2 = st.columns([1, 3])
-                    with col1:
-                        st.markdown(f"**{label.title()}**")
-                    with col2:
-                        st.progress(score)
-                        st.caption(f"{score:.2%}")
+        df = pd.read_csv(uploaded_file)
 
-                with st.expander("See Raw API Response"):
-                    st.json(results)
+        # Check if 'text' column exists
+        if "comment_text" in df.columns:
+            st.write(f"Loaded {len(df)} comments.")
 
-            # Handle specific security errors
-            elif response.status_code == 403:
-                st.error("⛔ **403 Forbidden**: Invalid API Key. Check the sidebar.")
-            elif response.status_code == 429:
-                st.error("⏳ **429 Too Many Requests**: Slow down!")
-            else:
-                st.error(f"Error: API returned status code {response.status_code}")
+            if st.button("Analyze Batch"):
+                # Prepare the batch payload
+                texts = df["comment_text"].tolist()
+                # Limit to 50 for demo purposes (so we don't crash browser)
+                if len(texts) > 50:
+                    st.warning("Truncating to first 50 rows for demo performance.")
+                    texts = texts[:50]
 
-        except requests.exceptions.ConnectionError:
-            st.error("❌ Could not connect to the backend. Is FastAPI running on port 8000?")
-    else:
-        st.warning("Please enter some text first.")
+                headers = {"X-API-Key": api_key}
+                payload = {"texts": texts}
+
+                with st.spinner("Analyzing..."):
+                    try:
+                        # Change Endpoint to /predict-batch
+                        # NOTE: Depending on your API_URL config, you might need to adjust the path string
+                        # If API_URL is "http://.../predict", strip it to base or just hardcode for now
+                        batch_url = API_URL.replace("/predict", "/predict-batch")
+
+                        response = requests.post(batch_url, json=payload, headers=headers)
+
+                        if response.status_code == 200:
+                            results = response.json()["results"]
+
+                            # Create a nice DataFrame for display
+                            result_df = pd.DataFrame(results)
+                            # Combine with original text
+                            final_df = pd.concat([pd.Series(texts, name="Comment"), result_df], axis=1)
+
+                            st.success("Analysis Complete!")
+                            st.dataframe(final_df.style.background_gradient(cmap="Reds", subset=result_df.columns))
+
+                        else:
+                            st.error(f"Error: {response.status_code}")
+
+                    except Exception as e:
+                        st.error(f"Connection Error: {e}")
+        else:
+            st.error("CSV must have a column named 'text'")

@@ -5,7 +5,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import joblib
 import os
-from .schemas import ToxicRequest, ToxicResponse
+from .schemas import ToxicRequest, ToxicResponse, ToxicBatchRequest, ToxicBatchResponse
 
 # --- CONFIGURATION ---
 # In a real app, these would come from a Database or Environment Variables
@@ -56,31 +56,35 @@ except Exception as e:
     print(f"Error loading model: {e}")
 
 
-# ... (Keep home endpoint) ...
-
-@app.post("/predict", response_model=ToxicResponse)
-@limiter.limit("5/minute")
-def predict(
+@app.post("/predict-batch", response_model=ToxicBatchResponse)
+@limiter.limit("5/minute")  # Limits batch calls too!
+def predict_batch(
         request: Request,
-        toxic_req: ToxicRequest,
+        batch_req: ToxicBatchRequest,
         api_key: str = Security(get_api_key)
 ):
     if not pipeline:
         raise HTTPException(status_code=500, detail="Model is not loaded.")
 
-    # MultiOutputClassifier `predict_proba` returns a LIST of arrays
-    # One array for each label.
-    input_text = [toxic_req.text]
-    probs_list = pipeline.predict_proba(input_text)
+    # 1. Vectorize and Predict ALL texts at once (Super fast!)
+    # pipeline.predict_proba returns a List of Arrays (one array per label)
+    # Shape of each array: (n_samples, 2)
+    probs_list = pipeline.predict_proba(batch_req.texts)
 
-    results = {}
+    batch_results = []
 
-    # Loop through the 6 labels and extract the probability of "True" (index 1)
-    for idx, label in enumerate(labels):
-        # probs_list[idx] is the array for the current label
-        # [0] gets the first sample (since we only sent one text)
-        # [1] gets the probability of class '1' (Positive)
-        prob = float(probs_list[idx][0][1])
-        results[label] = prob
+    # 2. Pivot the data
+    # We loop through the number of text inputs (e.g., 0 to 9)
+    for i in range(len(batch_req.texts)):
+        result = {}
+        # For each text, loop through the labels (toxic, obscene, etc.)
+        for idx, label in enumerate(labels):
+            # probs_list[idx] is the array for that label
+            # [i] is the specific text input
+            # [1] is the probability of True
+            score = float(probs_list[idx][i][1])
+            result[label] = score
 
-    return ToxicResponse(results=results)
+        batch_results.append(result)
+
+    return ToxicBatchResponse(results=batch_results)
