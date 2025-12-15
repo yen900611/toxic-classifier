@@ -28,7 +28,7 @@ with tab1:
             try:
                 headers = {"X-API-Key": api_key}
                 payload = {"text": user_input}
-                response = requests.post(f"{API_URL}/predict", json=payload, headers=headers)
+                response = requests.post(f"{API_URL}", json=payload, headers=headers)
 
                 # ... (Keep your existing single result display logic here) ...
                 # Note: Ensure API_URL in requests.post doesn't double the /predict path if you changed config

@@ -56,6 +56,27 @@ except Exception as e:
     print(f"Error loading model: {e}")
 
 
+# 加回原本的單筆預測功能
+@app.post("/predict", response_model=ToxicResponse)
+# @limiter.limit("5/minute")
+def predict(
+        request: Request,
+        toxic_req: ToxicRequest,
+        api_key: str = Security(get_api_key)
+):
+    if not pipeline:
+        raise HTTPException(status_code=500, detail="Model is not loaded.")
+
+    # 這裡的邏輯要配合 Multi-label (從 pipeline 取得結果)
+    input_text = [toxic_req.text]
+    probs_list = pipeline.predict_proba(input_text)
+
+    results = {}
+    for idx, label in enumerate(labels):
+        prob = float(probs_list[idx][0][1])
+        results[label] = prob
+
+    return ToxicResponse(results=results)
 @app.post("/predict-batch", response_model=ToxicBatchResponse)
 @limiter.limit("5/minute")  # Limits batch calls too!
 def predict_batch(
